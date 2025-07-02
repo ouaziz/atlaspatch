@@ -3,13 +3,15 @@ param(
   [string]$BuildDir = "C:/agent-builder"
 )
 # creat folder
-New-Item -ItemType Directory -Path $BuildDir -Force
+# New-Item -ItemType Directory -Path $BuildDir -Force
 
 # 1. Copier certificats
-Copy-Item ../certs/$CertCN.* $BuildDir
-Copy-Item ../certs/ca.crt $BuildDir
+# Copy-Item ../certs/$CertCN.* $BuildDir
+# Copy-Item ../certs/ca.crt $BuildDir
+# Copy-Item config_template.json $BuildDir
 
-Set-Location $BuildDir
+# Set-Location $BuildDir
+
 # 2. Créer config.json
 (Get-Content config_template.json) -replace 'atlaspatch.example.com', 'atlaspatch.local' | Set-Content config.json
 
