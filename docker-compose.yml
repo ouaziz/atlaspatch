@@ -29,10 +29,13 @@ services:
 
   django:
     build: ./web
-    command: gunicorn atlaspatchserver.wsgi:application --bind 0.0.0.0:8000
+    command: python manage.py runserver 0.0.0.0:8000
+    # command: gunicorn atlaspatchserver.wsgi:application --bind 0.0.0.0:8000
+    ports:
+      - "8000:8000"
     volumes:
       - ./web:/app
-      - certs:/certs:ro      # server & CA certs
+      - ./certs:/certs:ro      # server & CA certs
     environment:
       DJANGO_SECRET_KEY: 'CHANGE_ME'
       DJANGO_ALLOWED_HOSTS: '*'

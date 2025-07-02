@@ -4,3 +4,5 @@ psycopg2-binary
 cryptography
 python-dotenv
 dj-database-url
+djangorestframework
+drf-spectacular 
