@@ -4,12 +4,12 @@ param(
 )
 # creat folder
 New-Item -ItemType Directory -Path $BuildDir -Force
-Set-Location $BuildDir
 
 # 1. Copier certificats
-Copy-Item ../certs/$CertCN.* .
-Copy-Item ../certs/ca.crt .
+Copy-Item ../certs/$CertCN.* $BuildDir
+Copy-Item ../certs/ca.crt $BuildDir
 
+Set-Location $BuildDir
 # 2. Créer config.json
 (Get-Content config_template.json) -replace 'atlaspatch.example.com', 'atlaspatch.local' | Set-Content config.json
 
