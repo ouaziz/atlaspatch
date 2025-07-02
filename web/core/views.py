@@ -13,13 +13,45 @@ from .serializers import HeartbeatSerializer, CommandResultSerializer
 def _agent_from_cert(request):
     return request.META.get('HTTP_X_SSL_CLIENT_S_DN_CN') or request.headers.get('X-Agent-UUID')
 
+
+# class HeartbeatView(APIView):
+#     """
+#     L’agent appelle cet endpoint toutes les 30-60 s.
+#     Retour : la liste des commandes en attente.
+#     """
+#     authentication_classes = [ClientCertAuth]      # mTLS
+#     permission_classes     = []                    # ou IsAuthenticated
+
+#     def post(self, request):
+#         # 1) Valide le JSON
+#         serializer = HeartbeatInSerializer(data=request.data)
+#         serializer.is_valid(raise_exception=True)
+#         data = serializer.validated_data
+
+#         # 2) Upsert agent
+#         agent, created = Agent.objects.update_or_create(
+#             uuid=data["hardware_uuid"],
+#             defaults={
+#                 "hostname":  data["hostname"],
+#                 "version":   data["version"],
+#                 "last_seen": timezone.now(),
+#             },
+#         )
+#         # created == True  ➜ tout premier heartbeat
+
+#         # 3) Récupère les commandes PENDING
+#         cmds = Command.objects.filter(agent=agent, status="pending")\
+#                               .order_by("created_at")[:10]
+
+#         out_ser = CommandOutSerializer(cmds, many=True)
+#         return Response({"commands": out_ser.data}, status=status.HTTP_200_OK)
+
 class Heartbeat(APIView):
     def post(self, request):
         data = HeartbeatSerializer(data=request.data)
         data.is_valid(raise_exception=True)
-        agent_uuid = _agent_from_cert(request)
-        print(agent_uuid)
-        agent, _ = Agent.objects.get_or_create(uuid=agent_uuid,
+        hardware_uuid = data.validated_data['hardware_uuid']
+        agent, _ = Agent.objects.get_or_create(hardware_uuid=hardware_uuid,
                                                defaults={'hostname': data.validated_data['hostname'],
                                                          'version': data.validated_data['version']})
         agent.hostname = data.validated_data['hostname']
@@ -51,5 +83,5 @@ class AgentList(APIView):
         return Response(
             {
                 'count': agents.count(),
-                'agents': list(agents.values('uuid', 'hostname', 'version', 'last_seen'))
+                'agents': list(agents.values('hardware_uuid', 'hostname', 'version', 'last_seen'))
             })

@@ -5,7 +5,8 @@ import uuid
 from django.db import models
 
 class Agent(models.Model):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
+    hardware_uuid = models.CharField(unique=True, default="")
     hostname = models.CharField(max_length=255)
     version = models.CharField(max_length=50)
     last_seen = models.DateTimeField(auto_now=True)
@@ -13,6 +14,9 @@ class Agent(models.Model):
 
     def __str__(self):
         return self.hostname
+    
+    class Meta:
+        ordering = ("-last_seen",)
 
 class Command(models.Model):
     TYPES = [

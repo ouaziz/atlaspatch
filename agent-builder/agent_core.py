@@ -1,4 +1,4 @@
-import json, time, subprocess, requests, psutil, platform
+import json, time, subprocess, requests, psutil, platform, wmi, hashlib
 from pathlib import Path
 
 CONFIG = json.load(open(Path(__file__).with_name('local_config.json')))
@@ -8,9 +8,45 @@ session = requests.Session()
 session.cert = (CONFIG['cert'], CONFIG['key'])
 session.verify = CONFIG['ca']
 
+def get_hardware_uuid() -> str:
+    """
+    Returns a 32-char hexadecimal UUID for this machine.
+
+    Order of preference
+    -------------------
+    1. Win32_ComputerSystemProduct.UUID      ← real firmware UUID
+    2. `wmic csproduct get uuid`             ← fallback when WMI fails inside service
+    3. MAC-address hash (last-ditch)         ← guarantees global uniqueness
+    """
+    # --- 1) Regular WMI call --------------------------------------------
+    try:
+        c = wmi.WMI(namespace="root\\CIMV2")
+        uuid = c.Win32_ComputerSystemProduct()[0].UUID
+        if uuid and uuid != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF":
+            # standardise: upper-case, no braces, no dashes
+            return uuid.replace("{", "").replace("}", "").replace("-", "").upper()
+    except Exception:
+        pass
+
+    # --- 2) Fallback: shell out to wmic ----------------------------------
+    try:
+        output = subprocess.check_output(
+            ["wmic", "csproduct", "get", "uuid"], text=True, timeout=5
+        )
+        uuid = [line.strip() for line in output.splitlines() if line.strip()][1]
+        if uuid:
+            return uuid.replace("-", "").upper()
+    except Exception:
+        pass
+
+    # --- 3) Last resort: hash the first NIC MAC --------------------------
+    import uuid as py_uuid
+    mac = py_uuid.getnode().to_bytes(6, "big")
+    return hashlib.sha256(mac).hexdigest()[:32].upper()
 
 def collect_metrics():
     return {
+        'hardware_uuid': get_hardware_uuid(),
         'hostname': platform.node(),
         'version': '1.0.0',
         'cpu': psutil.cpu_percent(interval=1),
@@ -20,6 +56,7 @@ def collect_metrics():
 
 def send_heartbeat():
     payload = collect_metrics()
+    print(payload)
     try:
         r = session.post(SERVER + 'heartbeat/', json=payload, timeout=15)
         r.raise_for_status()

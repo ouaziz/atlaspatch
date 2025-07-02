@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import Command
 
 class HeartbeatSerializer(serializers.Serializer):
+    hardware_uuid = serializers.CharField()
     hostname = serializers.CharField()
     version = serializers.CharField()
     cpu = serializers.FloatField()
