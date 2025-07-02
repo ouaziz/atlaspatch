@@ -2,6 +2,8 @@ param(
   [string]$CertCN = "atlaspatch-agent-1",
   [string]$BuildDir = "C:/agent-builder"
 )
+# creat folder
+New-Item -ItemType Directory -Path $BuildDir -Force
 Set-Location $BuildDir
 
 # 1. Copier certificats
