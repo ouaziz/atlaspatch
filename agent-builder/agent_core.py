@@ -3,7 +3,7 @@ from pathlib import Path
 import logging
 from logging.handlers import RotatingFileHandler
 
-CONFIG = json.load(open(Path(__file__).with_name('local_config.json')))
+CONFIG = json.load(open(Path(__file__).with_name('config.json')))
 SERVER = CONFIG['server_url']
 
 session = requests.Session()
