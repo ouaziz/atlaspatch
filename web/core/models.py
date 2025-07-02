@@ -1,8 +1,7 @@
-from django.db import models
-
-# Create your models here.
 import uuid
 from django.db import models
+from django.db.models import DateTimeField, Func
+from django.utils import timezone
 
 class Agent(models.Model):
     uuid = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
@@ -32,9 +31,26 @@ class Command(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+class TruncDay(Func):
+    function = 'date_trunc'
+    template = "%(function)s('day', %(expressions)s)"
+
+
 class Metric(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='metrics')
     cpu = models.FloatField()
     mem = models.FloatField()
     disk = models.FloatField()
     captured_at = models.DateTimeField()
+    # class Meta:
+    #     unique_together = (
+    #         ("agent", "day_bucket"),
+    #     )
+
+    # # champ virtuel stocké (requires migrations)
+    # day_bucket = DateTimeField(editable=False)
+
+    # def save(self, *args, **kwargs):
+    #     self.day_bucket = self.captured_at.replace(hour=0, minute=0,
+    #                                                second=0, microsecond=0)
+    #     super().save(*args, **kwargs)

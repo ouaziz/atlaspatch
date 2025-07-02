@@ -12,7 +12,6 @@ from django.db import connection
 from django.contrib.auth.models import Group, Permission
 
 from django.core.wsgi import get_wsgi_application
-# from django.conf import settings
 
 application = get_wsgi_application()
 
@@ -30,8 +29,8 @@ def seed_data():
     # seed for dev
     print("=============fixtures/user.json")
     os.system(f"python manage.py loaddata fixtures/user.json ")
-    print("=============fixtures/profile.json")
-    os.system(f"python manage.py loaddata fixtures/profile.json ")
+    # print("=============fixtures/profile.json")
+    # os.system(f"python manage.py loaddata fixtures/profile.json ")
 
     ## set permissions to groups
     permissions = Permission.objects.exclude(content_type__app_label__in=["admin","sessions"])

@@ -13,39 +13,6 @@ from .serializers import HeartbeatSerializer, CommandResultSerializer
 def _agent_from_cert(request):
     return request.META.get('HTTP_X_SSL_CLIENT_S_DN_CN') or request.headers.get('X-Agent-UUID')
 
-
-# class HeartbeatView(APIView):
-#     """
-#     L’agent appelle cet endpoint toutes les 30-60 s.
-#     Retour : la liste des commandes en attente.
-#     """
-#     authentication_classes = [ClientCertAuth]      # mTLS
-#     permission_classes     = []                    # ou IsAuthenticated
-
-#     def post(self, request):
-#         # 1) Valide le JSON
-#         serializer = HeartbeatInSerializer(data=request.data)
-#         serializer.is_valid(raise_exception=True)
-#         data = serializer.validated_data
-
-#         # 2) Upsert agent
-#         agent, created = Agent.objects.update_or_create(
-#             uuid=data["hardware_uuid"],
-#             defaults={
-#                 "hostname":  data["hostname"],
-#                 "version":   data["version"],
-#                 "last_seen": timezone.now(),
-#             },
-#         )
-#         # created == True  ➜ tout premier heartbeat
-
-#         # 3) Récupère les commandes PENDING
-#         cmds = Command.objects.filter(agent=agent, status="pending")\
-#                               .order_by("created_at")[:10]
-
-#         out_ser = CommandOutSerializer(cmds, many=True)
-#         return Response({"commands": out_ser.data}, status=status.HTTP_200_OK)
-
 class Heartbeat(APIView):
     def post(self, request):
         data = HeartbeatSerializer(data=request.data)
@@ -64,6 +31,16 @@ class Heartbeat(APIView):
                               disk=data.validated_data['disk'],
                               captured_at=timezone.now())
 
+        # Metric.objects.update_or_create(
+        #     agent=agent,
+        #     day_bucket=timezone.now().replace(hour=0, minute=0, second=0, microsecond=0),
+        #     defaults=dict(
+        #         captured_at=timezone.now(),
+        #         cpu=data.validated_data['cpu'],
+        #         mem=data.validated_data['mem'],
+        #         disk=data.validated_data['disk'],
+        #     )
+        # )
         pending = list(agent.commands.filter(status='pending').values('id', 'type', 'payload'))
         return Response({'commands': pending})
 
