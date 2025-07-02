@@ -5,3 +5,6 @@ openssl x509 -req -in client2.csr -CA certs/ca.crt -CAkey certs/ca.key -CAcreate
              -out client2.crt -days 825 -sha256
 
 Fournissez au Laptop : client*.crt, client*.key, et la CA ca.crt.
+
+# generer le .exe
+makensis AtlasPatchInstaller.nsi
