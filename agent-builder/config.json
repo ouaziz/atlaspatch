@@ -1,0 +1,7 @@
+{
+    "server_url": "https://atlaspatch.local/api/v1/",
+    "poll_interval": 10,
+    "cert": "C:/Program Files (x86)/AtlasPatch/agent1.crt",
+    "key":  "C:/Program Files (x86)/AtlasPatch/agent1.key",
+    "ca":   "C:/Program Files (x86)/AtlasPatch/ca.crt"
+}

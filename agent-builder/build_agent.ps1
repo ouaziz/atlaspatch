@@ -1,5 +1,5 @@
 param(
-  [string]$CertCN = "atlaspatch-agent-1",
+  [string]$CertCN = "agent1",
   [string]$BuildDir = "C:/agent-builder"
 )
 # creat folder
@@ -17,7 +17,7 @@ param(
 
 # 3. Build EXE
 pip install -r requirements.txt
-pyinstaller --clean --onefile --noconsole AtlasPatchAgent.spec
+pyinstaller --clean AtlasPatchAgent.spec
 
 # 4. (optionnel) Signature code
 # signtool sign /f mycode.pfx /p $env:PFX_PASS /tr http://timestamp.digicert.com /td sha256 dist/AtlasPatchAgent.exe

@@ -18,6 +18,7 @@ class Heartbeat(APIView):
         data = HeartbeatSerializer(data=request.data)
         data.is_valid(raise_exception=True)
         agent_uuid = _agent_from_cert(request)
+        print(agent_uuid)
         agent, _ = Agent.objects.get_or_create(uuid=agent_uuid,
                                                defaults={'hostname': data.validated_data['hostname'],
                                                          'version': data.validated_data['version']})

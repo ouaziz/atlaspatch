@@ -1,0 +1,4 @@
+certs
+agent-builder/dist
+agent-builder/build
+.venv

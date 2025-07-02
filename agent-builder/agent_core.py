@@ -1,12 +1,13 @@
 import json, time, subprocess, requests, psutil, platform
 from pathlib import Path
 
-CONFIG = json.load(open(Path(__file__).with_name('config.json')))
+CONFIG = json.load(open(Path(__file__).with_name('local_config.json')))
 SERVER = CONFIG['server_url']
 
 session = requests.Session()
 session.cert = (CONFIG['cert'], CONFIG['key'])
 session.verify = CONFIG['ca']
+
 
 def collect_metrics():
     return {
@@ -19,9 +20,12 @@ def collect_metrics():
 
 def send_heartbeat():
     payload = collect_metrics()
-    r = session.post(SERVER + 'heartbeat/', json=payload, timeout=15)
-    r.raise_for_status()
-    return r.json().get('commands', [])
+    try:
+        r = session.post(SERVER + 'heartbeat/', json=payload, timeout=15)
+        r.raise_for_status()
+        return r.json().get('commands', [])
+    except requests.exceptions.RequestException as e:
+        return []
 
 def exec_upgrade_apps():
     subprocess.run(['winget', 'upgrade', '--all', '--silent', '--accept-source-agreements', '--accept-package-agreements'],
@@ -37,6 +41,7 @@ def report(cid, status, log):
 def main_loop():
     while True:
         try:
+            print("Heartbeat...")
             cmds = send_heartbeat()
             for c in cmds:
                 cid = c['id']
@@ -45,8 +50,10 @@ def main_loop():
                 log = ''
                 try:
                     if typ == 'UPGRADE_APPS':
+                        print("Upgrade apps...")
                         exec_upgrade_apps()
                     elif typ == 'UPDATE_OS':
+                        print("Update OS...")
                         exec_update_os()
                     elif typ == 'STOP_AGENT':
                         status = 'done'
@@ -56,6 +63,10 @@ def main_loop():
                     status = 'failed'
                     log = str(e)
                 report(cid, status, log)
-        except Exception:
+        except Exception as e:
             pass  # réseau KO ⇒ nouvelle tentative
         time.sleep(CONFIG['poll_interval'])
+
+if __name__ == '__main__':
+    main_loop()
+    

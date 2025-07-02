@@ -2,3 +2,4 @@ psutil
 wmi
 requests
 pywin32
+pyinstaller
