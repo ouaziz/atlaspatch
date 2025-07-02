@@ -1,12 +1,12 @@
 # -*- mode: python -*-
 block_cipher = None
 
-hiddenimports = ['wmi']
+hiddenimports = ['wmi', "win32timezone"]
 
 a = Analysis(['agent_service.py'],
              pathex=['.'],
              binaries=[],
-             datas=[('config.json', '.'), ('ca.crt', '.'), ('client.crt', '.'), ('client.key', '.')],
+             datas=[('config.json', '.'), ('ca.crt', '.'), ('agent1.crt', '.'), ('agent1.key', '.')],
              hiddenimports=hiddenimports,
              hookspath=[],
              runtime_hooks=[],

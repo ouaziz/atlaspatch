@@ -1,5 +1,7 @@
 import json, time, subprocess, requests, psutil, platform, wmi, hashlib
 from pathlib import Path
+import logging
+from logging.handlers import RotatingFileHandler
 
 CONFIG = json.load(open(Path(__file__).with_name('local_config.json')))
 SERVER = CONFIG['server_url']
@@ -7,6 +9,16 @@ SERVER = CONFIG['server_url']
 session = requests.Session()
 session.cert = (CONFIG['cert'], CONFIG['key'])
 session.verify = CONFIG['ca']
+
+# Set up logging
+log_file = 'C:/Program Files (x86)/AtlasPatch/agent_atlaspatch.log'
+logging.basicConfig(
+    handlers=[RotatingFileHandler(log_file, maxBytes=10485760, backupCount=5)],
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('AtlasPatchAgent')
+
 
 def get_hardware_uuid() -> str:
     """
@@ -56,12 +68,12 @@ def collect_metrics():
 
 def send_heartbeat():
     payload = collect_metrics()
-    print(payload)
     try:
         r = session.post(SERVER + 'heartbeat/', json=payload, timeout=15)
         r.raise_for_status()
         return r.json().get('commands', [])
     except requests.exceptions.RequestException as e:
+        logger.error(f"Heartbeat failed: {e}")
         return []
 
 def exec_upgrade_apps():
@@ -76,9 +88,9 @@ def report(cid, status, log):
     session.post(f"{SERVER}commands/{cid}/result/", json={'status': status, 'log': log[:4000]})
 
 def main_loop():
+    logger.info("Starting main loop...")
     while True:
         try:
-            print("Heartbeat...")
             cmds = send_heartbeat()
             for c in cmds:
                 cid = c['id']
@@ -87,10 +99,8 @@ def main_loop():
                 log = ''
                 try:
                     if typ == 'UPGRADE_APPS':
-                        print("Upgrade apps...")
                         exec_upgrade_apps()
                     elif typ == 'UPDATE_OS':
-                        print("Update OS...")
                         exec_update_os()
                     elif typ == 'STOP_AGENT':
                         status = 'done'
@@ -101,6 +111,7 @@ def main_loop():
                     log = str(e)
                 report(cid, status, log)
         except Exception as e:
+            logger.error(f"Heartbeat failed: {e}")
             pass  # réseau KO ⇒ nouvelle tentative
         time.sleep(CONFIG['poll_interval'])
 
