@@ -5,13 +5,9 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import Agent, Command, Metric
-from .serializers import HeartbeatSerializer, CommandResultSerializer
+from .models import Agent, Command, Metric, Inventory
+from .serializers import HeartbeatSerializer, CommandResultSerializer, MetricSerializer, AgentSerializer, CommandSerializer, CommandCreateSerializer, InventorySerializer   
 
-# Récupère le CN du certificat client (passé par Nginx)
-
-def _agent_from_cert(request):
-    return request.META.get('HTTP_X_SSL_CLIENT_S_DN_CN') or request.headers.get('X-Agent-UUID')
 
 class Heartbeat(APIView):
     def post(self, request):
@@ -42,6 +38,12 @@ class Heartbeat(APIView):
         #     )
         # )
         pending = list(agent.commands.filter(status='pending').values('id', 'type', 'payload'))
+
+        # update inventory
+        Inventory.objects.create(agent=agent,
+                                 name=data.validated_data['inventory'][0]['name'],
+                                 version=data.validated_data['inventory'][0]['version'],
+                                 captured_at=timezone.now())
         return Response({'commands': pending})
 
 class CommandResult(APIView):
@@ -52,13 +54,120 @@ class CommandResult(APIView):
         cmd.status = serializer.validated_data['status']
         cmd.result = {'log': serializer.validated_data.get('log', '')}
         cmd.save(update_fields=['status', 'result', 'updated_at'])
-        return Response({'ok': True})
+        return Response({'status': 'success'})
 
+class CommandServerList(APIView):
+    def get(self, request, uuid):
+        try:
+            commands = CommandSerializer(Command.objects.filter(agent=uuid), many=True)
+            return Response(
+                {
+                    'status': 'success',
+                    'data': commands.data
+                })
+        except Exception as e:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': str(e)
+                })
+
+class CommandCreate(APIView):
+    def post(self, request):
+        try:
+            serializer = CommandCreateSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            command = serializer.save()
+            return Response(
+                {
+                'status': 'success',
+                'data': CommandSerializer(command).data
+            })
+        except Exception as e:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': str(e)
+                })
+
+# agents
 class AgentList(APIView):
     def get(self, request):
-        agents = Agent.objects.all()
-        return Response(
-            {
-                'count': agents.count(),
-                'agents': list(agents.values('hardware_uuid', 'hostname', 'version', 'last_seen'))
-            })
+        try:
+            agents = AgentSerializer(Agent.objects.all(), many=True)
+            return Response(
+                {
+                    'status': 'success',
+                    'data': agents.data
+                })
+        except Exception as e:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': str(e)
+                })
+
+class MetricDetail(APIView):
+    def get(self, request, pk):
+        try:
+            metric = MetricSerializer(Metric.objects.get(pk=pk))
+            return Response(
+                {
+                    'status': 'success',
+                    'data': metric.data
+                })
+        except Exception as e:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': str(e)
+                })
+        
+
+class MetricServerDetail(APIView):
+    def get(self, request, uuid):
+        try:
+            metric = MetricSerializer(Metric.objects.filter(agent=uuid), many=True)
+            return Response(
+                {
+                    'status': 'success',
+                    'data': metric.data
+                })
+        except Exception as e:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': str(e)
+                })
+    
+class InventoryDetail(APIView):
+    def get(self, request, pk):
+        try:
+            inventory = InventorySerializer(Inventory.objects.get(pk=pk))
+            return Response(
+                {
+                    'status': 'success',
+                    'data': inventory.data
+                })
+        except Exception as e:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': str(e)
+                })
+    
+class InventoryServerDetail(APIView):
+    def get(self, request, uuid):
+        try:
+            inventory = InventorySerializer(Inventory.objects.filter(agent=uuid), many=True)
+            return Response(
+                {
+                    'status': 'success',
+                    'data': inventory.data
+                })
+        except Exception as e:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': str(e)
+                })

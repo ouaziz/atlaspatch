@@ -2,8 +2,13 @@ import json, time, subprocess, requests, psutil, platform, wmi, hashlib
 from pathlib import Path
 import logging
 from logging.handlers import RotatingFileHandler
+import json
+import subprocess
+import datetime as dt
+from typing import List, Dict
 
-CONFIG = json.load(open(Path(__file__).with_name('config.json')))
+
+CONFIG = json.load(open(Path(__file__).with_name('local_config.json')))
 SERVER = CONFIG['server_url']
 
 session = requests.Session()
@@ -56,6 +61,33 @@ def get_hardware_uuid() -> str:
     mac = py_uuid.getnode().to_bytes(6, "big")
     return hashlib.sha256(mac).hexdigest()[:32].upper()
 
+def collect_inventory_winget() -> List[Dict[str, str]]:
+    """
+    Récupère la liste des logiciels installés via `winget list --output json`
+    et normalise le résultat en {name, version, captured_at}.
+    """
+    try:
+        raw = subprocess.check_output(
+            ["winget", "list", "--output", "json"],
+            text=True, encoding="utf-8", errors="ignore"
+        )
+    except FileNotFoundError:
+        raise RuntimeError("winget n'est pas disponible sur ce système.")
+    packages = json.loads(raw)
+
+    now_iso = dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    inventory = [
+        {
+            "name": pkg.get("Name", "").strip(),
+            "version": pkg.get("Version", "").strip(),
+            "captured_at": now_iso,
+        }
+        for pkg in packages
+        if pkg.get("Name")  # on ignore les entrées vides
+    ]
+    return inventory
+
+
 def collect_metrics():
     return {
         'hardware_uuid': get_hardware_uuid(),
@@ -64,6 +96,7 @@ def collect_metrics():
         'cpu': psutil.cpu_percent(interval=1),
         'mem': psutil.virtual_memory().percent,
         'disk': psutil.disk_usage('C:/').percent,
+        'inventory': collect_inventory_winget(),
     }
 
 def send_heartbeat():
@@ -76,7 +109,7 @@ def send_heartbeat():
         logger.error(f"Heartbeat failed: {e}")
         return []
 
-def exec_upgrade_apps():
+def exec_upgrade_all_apps():
     subprocess.run(['winget', 'upgrade', '--all', '--silent', '--accept-source-agreements', '--accept-package-agreements'],
                    capture_output=True, text=True, timeout=3600)
 
@@ -98,8 +131,10 @@ def main_loop():
                 status = 'done'
                 log = ''
                 try:
-                    if typ == 'UPGRADE_APPS':
-                        exec_upgrade_apps()
+                    if typ == 'UPGRADE_ALL_APPS':
+                        exec_upgrade_all_apps()
+                    elif typ == 'UPGRADE_APP':
+                        exec_upgrade_app()
                     elif typ == 'UPDATE_OS':
                         exec_update_os()
                     elif typ == 'STOP_AGENT':

@@ -24,8 +24,7 @@ services:
     ports:
       - "5050:80"
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
 
   django:
     build: ./web
@@ -42,8 +41,7 @@ services:
       DJANGO_DEBUG: '0'
       DATABASE_URL: 'postgres://postgres:postgres@postgres:5432/postgres'
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
 
   nginx:
     image: nginx:1.29-alpine
@@ -53,8 +51,7 @@ services:
     ports:
       - "443:443"
     depends_on:
-      django:
-        condition: service_healthy
+      - django
 
 volumes:
   postgres_data:

@@ -19,7 +19,8 @@ class Agent(models.Model):
 
 class Command(models.Model):
     TYPES = [
-        ('UPGRADE_APPS', 'Upgrade apps'),
+        ('UPGRADE_ALL_APPS', 'Upgrade all apps'),
+        ('UPGRADE_APP', 'Upgrade app'),
         ('UPDATE_OS', 'Update OS'),
         ('STOP_AGENT', 'Stop agent'),
     ]
@@ -54,3 +55,21 @@ class Metric(models.Model):
     #     self.day_bucket = self.captured_at.replace(hour=0, minute=0,
     #                                                second=0, microsecond=0)
     #     super().save(*args, **kwargs)
+
+
+class Inventory(models.Model):
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='inventory')
+    name = models.CharField(max_length=255)
+    version = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} {self.version}"
+    
+    class Meta:
+        unique_together = (
+            ("agent", "name"),
+        )
+        ordering = ("-created_at",)
+    
