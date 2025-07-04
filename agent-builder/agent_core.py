@@ -1,11 +1,9 @@
 import json, time, subprocess, requests, psutil, platform, wmi, hashlib
+import datetime as dt
+import tempfile, uuid, pathlib
 from pathlib import Path
 import logging
 from logging.handlers import RotatingFileHandler
-import json
-import subprocess
-import datetime as dt
-from typing import List, Dict
 
 
 CONFIG = json.load(open(Path(__file__).with_name('local_config.json')))
@@ -61,30 +59,43 @@ def get_hardware_uuid() -> str:
     mac = py_uuid.getnode().to_bytes(6, "big")
     return hashlib.sha256(mac).hexdigest()[:32].upper()
 
-def collect_inventory_winget() -> List[Dict[str, str]]:
+def collect_inventory_winget():
     """
-    Récupère la liste des logiciels installés via `winget list --output json`
-    et normalise le résultat en {name, version, captured_at}.
+    Retourne [{name, version, captured_at}, …] pour tous les logiciels installés.
+    Utilise d'abord `winget list --output json`, puis retombe sur `winget export`
+    si l'option JSON n'est pas prise en charge.
     """
+    def _now():
+        return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
     try:
-        raw = subprocess.check_output(
+        output = subprocess.check_output(
             ["winget", "list", "--output", "json"],
             text=True, encoding="utf-8", errors="ignore"
         )
-    except FileNotFoundError:
-        raise RuntimeError("winget n'est pas disponible sur ce système.")
-    packages = json.loads(raw)
+        pkgs = json.loads(output)          # liste de dicts
+    except subprocess.CalledProcessError:
+        # Fallback : export → on lit le fichier généré
+        temp = pathlib.Path(tempfile.gettempdir()) / f"winget_{uuid.uuid4().hex}.json"
+        subprocess.check_call([
+            "winget", "export",
+            "--include-versions",
+            "--accept-source-agreements",
+            "-o", str(temp)
+        ])
+        export = json.load(temp.open())
+        pkgs = export["Sources"][0]["Packages"]   # structure différente
 
-    now_iso = dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    inventory = [
-        {
-            "name": pkg.get("Name", "").strip(),
-            "version": pkg.get("Version", "").strip(),
-            "captured_at": now_iso,
-        }
-        for pkg in packages
-        if pkg.get("Name")  # on ignore les entrées vides
-    ]
+    inventory = []
+    for pkg in pkgs:
+        inventory.append({
+            "name":     pkg.get("Name") or pkg.get("PackageIdentifier"),
+            "version":  pkg.get("Version", "").strip() or           # sortie `list`
+                        pkg.get("InstalledVersion", "").strip() or  # sortie `list` (vieux)
+                        pkg.get("PackageVersion", "").strip() or    # sortie `show` éventuelle
+                        "",                             # rien dans l’export
+            "captured_at": _now(),
+        })
     return inventory
 
 
@@ -106,6 +117,7 @@ def send_heartbeat():
         r.raise_for_status()
         return r.json().get('commands', [])
     except requests.exceptions.RequestException as e:
+        print(f"Heartbeat failed: {e}")
         logger.error(f"Heartbeat failed: {e}")
         return []
 
@@ -122,8 +134,10 @@ def report(cid, status, log):
 
 def main_loop():
     logger.info("Starting main loop...")
+    print("Starting main loop...")
     while True:
         try:
+            print("Heartbeat...")
             cmds = send_heartbeat()
             for c in cmds:
                 cid = c['id']
@@ -132,21 +146,28 @@ def main_loop():
                 log = ''
                 try:
                     if typ == 'UPGRADE_ALL_APPS':
+                        print("Upgrade all apps...")
                         exec_upgrade_all_apps()
                     elif typ == 'UPGRADE_APP':
+                        print("Upgrade app...")
                         exec_upgrade_app()
                     elif typ == 'UPDATE_OS':
+                        print("Update OS...")
                         exec_update_os()
                     elif typ == 'STOP_AGENT':
+                        print("Stopping agent...")
                         status = 'done'
                         report(cid, status, 'stopping')
                         return  # handled by service wrapper
                 except Exception as e:
+                    print(f"Command failed: {e}")
+                    logger.error(f"Command failed: {e}")
                     status = 'failed'
                     log = str(e)
                 report(cid, status, log)
         except Exception as e:
             logger.error(f"Heartbeat failed: {e}")
+            print(f"Heartbeat failed-: {e}")
             pass  # réseau KO ⇒ nouvelle tentative
         time.sleep(CONFIG['poll_interval'])
 

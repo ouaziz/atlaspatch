@@ -7,24 +7,25 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from .models import Agent, Command, Metric, Inventory
 from .serializers import HeartbeatSerializer, CommandResultSerializer, MetricSerializer, AgentSerializer, CommandSerializer, CommandCreateSerializer, InventorySerializer   
-
+from rest_framework import status
 
 class Heartbeat(APIView):
     def post(self, request):
-        data = HeartbeatSerializer(data=request.data)
-        data.is_valid(raise_exception=True)
-        hardware_uuid = data.validated_data['hardware_uuid']
+        serializer = HeartbeatSerializer(data=request.data)   # ①
+        serializer.is_valid(raise_exception=True)             # ② validation
+        data = serializer.validated_data  
+        hardware_uuid = data['hardware_uuid']
         agent, _ = Agent.objects.get_or_create(hardware_uuid=hardware_uuid,
-                                               defaults={'hostname': data.validated_data['hostname'],
-                                                         'version': data.validated_data['version']})
-        agent.hostname = data.validated_data['hostname']
-        agent.version = data.validated_data['version']
+                                               defaults={'hostname': data['hostname'],
+                                                         'version': data['version']})
+        agent.hostname = data['hostname']
+        agent.version = data['version']
         agent.save(update_fields=['hostname', 'version', 'last_seen'])
 
         Metric.objects.create(agent=agent,
-                              cpu=data.validated_data['cpu'],
-                              mem=data.validated_data['mem'],
-                              disk=data.validated_data['disk'],
+                              cpu=data['cpu'],
+                              mem=data['mem'],
+                              disk=data['disk'],
                               captured_at=timezone.now())
 
         # Metric.objects.update_or_create(
@@ -40,11 +41,32 @@ class Heartbeat(APIView):
         pending = list(agent.commands.filter(status='pending').values('id', 'type', 'payload'))
 
         # update inventory
-        Inventory.objects.create(agent=agent,
-                                 name=data.validated_data['inventory'][0]['name'],
-                                 version=data.validated_data['inventory'][0]['version'],
-                                 captured_at=timezone.now())
-        return Response({'commands': pending})
+        # Inventory.objects.bulk_create([
+        #     Inventory(
+        #         agent=agent,
+        #         name=item["name"],
+        #         version=item["version"],
+        #         captured_at=item["captured_at"],
+        #     )
+        #     for item in data["inventory"]
+        # ])
+        to_insert = [
+            Inventory(
+                agent=agent,
+                name=item["name"],
+                version=item["version"],
+                captured_at=item["captured_at"],
+            )
+            for item in data["inventory"]
+        ]
+
+        Inventory.objects.bulk_create(
+            to_insert,
+            update_conflicts=True,
+            unique_fields=["agent", "name"],
+            update_fields=["version", "captured_at"],
+        )
+        return Response({"status": "success", "data": pending}, status=status.HTTP_200_OK)
 
 class CommandResult(APIView):
     def post(self, request, pk):
@@ -54,7 +76,7 @@ class CommandResult(APIView):
         cmd.status = serializer.validated_data['status']
         cmd.result = {'log': serializer.validated_data.get('log', '')}
         cmd.save(update_fields=['status', 'result', 'updated_at'])
-        return Response({'status': 'success'})
+        return Response({"status": "success"}, status=status.HTTP_200_OK)
 
 class CommandServerList(APIView):
     def get(self, request, uuid):

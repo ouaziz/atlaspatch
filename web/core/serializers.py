@@ -8,14 +8,20 @@ class AgentSerializer(serializers.ModelSerializer):
         model = Agent
         fields = '__all__'
 # heartbeat
+class InventoryItemSerializer(serializers.Serializer):
+    name         = serializers.CharField()
+    version      = serializers.CharField(allow_blank=True, required=False)
+    captured_at  = serializers.DateTimeField()      # ISO-8601 venant de l’agent
+
+
 class HeartbeatSerializer(serializers.Serializer):
     hardware_uuid = serializers.CharField()
-    hostname = serializers.CharField()
-    version = serializers.CharField()
-    cpu = serializers.FloatField()
-    mem = serializers.FloatField()
-    disk = serializers.FloatField()
-    inventory = serializers.StringRelatedField(many=True)
+    hostname      = serializers.CharField()
+    version       = serializers.CharField()
+    cpu           = serializers.FloatField()
+    mem           = serializers.FloatField()
+    disk          = serializers.FloatField()
+    inventory     = InventoryItemSerializer(many=True)
 # commands
 class CommandResultSerializer(serializers.Serializer):
     status = serializers.CharField()

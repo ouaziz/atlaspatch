@@ -61,6 +61,7 @@ class Inventory(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='inventory')
     name = models.CharField(max_length=255)
     version = models.CharField(max_length=50)
+    captured_at  = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
