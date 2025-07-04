@@ -28,7 +28,22 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# JWT
+with open(Path("/certs/server.key")) as f:
+    JWT_PRIVATE_KEY = f.read()
 
+# with open(Path(os.path.join(BASE_DIR, "certs/server.crt"))) as f:
+#     JWT_PUBLIC_KEY = f.read()
+
+JWT_ALGORITHM = "RS256"
+JWT_LIFETIME   = 30 * 60  # secondes
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+        'core.auth.JWTAuth',
+    ]
+}
 # Application definition
 
 INSTALLED_APPS = [

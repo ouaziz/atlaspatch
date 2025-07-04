@@ -1,4 +1,4 @@
-import json, time, subprocess, requests, psutil, platform, wmi, hashlib
+import json, time, subprocess, requests, psutil, platform, wmi, hashlib, jwt
 import datetime as dt
 import tempfile, uuid, pathlib
 from pathlib import Path
@@ -21,6 +21,47 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('AtlasPatchAgent')
+
+# --- Gestion du JWT court ------------------------------------------------
+ACCESS_TOKEN = None      # jeton courant
+TOKEN_EXP    = 0         # timestamp « exp » (epoch s)
+
+def _set_token(token: str):
+    """Enregistre le token en mémoire et dans les en-têtes HTTP."""
+    global ACCESS_TOKEN, TOKEN_EXP
+    ACCESS_TOKEN = token
+    TOKEN_EXP = jwt.decode(token, options={"verify_signature": False})["exp"]
+    session.headers["Authorization"] = f"Bearer {token}"
+
+def login():
+    """
+    Appelle /login/ (protégé par mTLS) pour obtenir un premier JWT.
+    À faire une seule fois au démarrage, ou si l’on perd le token.
+    """
+    try:
+        r = session.post(f"{SERVER}login/", timeout=15)
+        r.raise_for_status()
+        _set_token(r.json()["access"])
+        logger.info("Login OK – access token enregistré")
+    except Exception as e:
+        logger.error(f"Login failed: {e}")
+        raise
+
+def maybe_refresh_token():
+    """
+    Si le token expire dans < 5 min, on en demande un nouveau via /heartbeat/.
+    """
+    if time.time() <= TOKEN_EXP - 300:
+        return                                              # encore valide
+    try:
+        r = session.post(f"{SERVER}heartbeat/", json={}, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        if "access" in data:
+            _set_token(data["access"])
+            logger.info("Token rafraîchi automatiquement")
+    except Exception as e:
+        logger.error(f"Token refresh failed: {e}")          # on réessaiera
 
 
 def get_hardware_uuid() -> str:
@@ -111,13 +152,19 @@ def collect_metrics():
     }
 
 def send_heartbeat():
+    maybe_refresh_token()                       # ← nouveau
     payload = collect_metrics()
     try:
-        r = session.post(SERVER + 'heartbeat/', json=payload, timeout=15)
+        r = session.post(f"{SERVER}heartbeat/", json=payload, timeout=15)
         r.raise_for_status()
-        return r.json().get('commands', [])
+        data = r.json()
+
+        # Le serveur renvoie un nouveau token si le nôtre expire bientôt
+        if "access" in data:
+            _set_token(data["access"])
+
+        return data.get("commands", [])
     except requests.exceptions.RequestException as e:
-        print(f"Heartbeat failed: {e}")
         logger.error(f"Heartbeat failed: {e}")
         return []
 
@@ -135,6 +182,18 @@ def report(cid, status, log):
 def main_loop():
     logger.info("Starting main loop...")
     print("Starting main loop...")
+    
+    # --- nouveau : authentification initiale ----------------------------
+    for attempt in range(5):
+        try:
+            login()
+            break
+        except Exception:
+            logger.warning("Retrying login in 5 s…")
+            time.sleep(5)
+    else:
+        logger.critical("Impossible de récupérer un token – arrêt.")
+        return
     while True:
         try:
             print("Heartbeat...")

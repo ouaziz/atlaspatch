@@ -2,3 +2,4 @@ certs
 agent-builder/dist
 agent-builder/build
 .venv
+agent-builder/apps.json

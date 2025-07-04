@@ -6,3 +6,5 @@ python-dotenv
 dj-database-url
 djangorestframework
 drf-spectacular 
+cryptography          # requis par PyJWT pour RS256
+PyJWT>=2.8            # ajout 👉  indispensable

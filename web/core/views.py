@@ -9,7 +9,23 @@ from .models import Agent, Command, Metric, Inventory
 from .serializers import HeartbeatSerializer, CommandResultSerializer, MetricSerializer, AgentSerializer, CommandSerializer, CommandCreateSerializer, InventorySerializer   
 from rest_framework import status
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .utils.jwt import make_access_token
+from .auth import JWTAuth
+
+class AgentLogin(APIView):
+    authentication_classes = []       # mTLS fait déjà l’auth
+    permission_classes     = []
+
+    def post(self, request):
+        agent_id = request.client_cert.subject.rfc4514_string()  # ex.
+        access = make_access_token(agent_id)
+        return Response({"access": access})
+
 class Heartbeat(APIView):
+    authentication_classes = [JWTAuth]   # le token courant est vérifié
+    permission_classes     = []
     def post(self, request):
         serializer = HeartbeatSerializer(data=request.data)   # ①
         serializer.is_valid(raise_exception=True)             # ② validation
@@ -28,28 +44,8 @@ class Heartbeat(APIView):
                               disk=data['disk'],
                               captured_at=timezone.now())
 
-        # Metric.objects.update_or_create(
-        #     agent=agent,
-        #     day_bucket=timezone.now().replace(hour=0, minute=0, second=0, microsecond=0),
-        #     defaults=dict(
-        #         captured_at=timezone.now(),
-        #         cpu=data.validated_data['cpu'],
-        #         mem=data.validated_data['mem'],
-        #         disk=data.validated_data['disk'],
-        #     )
-        # )
         pending = list(agent.commands.filter(status='pending').values('id', 'type', 'payload'))
 
-        # update inventory
-        # Inventory.objects.bulk_create([
-        #     Inventory(
-        #         agent=agent,
-        #         name=item["name"],
-        #         version=item["version"],
-        #         captured_at=item["captured_at"],
-        #     )
-        #     for item in data["inventory"]
-        # ])
         to_insert = [
             Inventory(
                 agent=agent,
@@ -66,9 +62,17 @@ class Heartbeat(APIView):
             unique_fields=["agent", "name"],
             update_fields=["version", "captured_at"],
         )
-        return Response({"status": "success", "data": pending}, status=status.HTTP_200_OK)
+        # return Response({"status": "success", "data": pending}, status=status.HTTP_200_OK)
+        # Si le token expire dans < 5 min, renvoyer un nouveau
+        ttl = request.auth["exp"] - int(time.time())
+        if ttl < 300:
+            new_token = make_access_token(request.auth["sub"])
+            return Response({"status": "success", "access": new_token})
+        return Response({"status": "success"})
 
 class CommandResult(APIView):
+    authentication_classes = [JWTAuth]   # le token courant est vérifié
+    permission_classes     = []
     def post(self, request, pk):
         cmd = get_object_or_404(Command, pk=pk)
         serializer = CommandResultSerializer(data=request.data)
@@ -79,6 +83,8 @@ class CommandResult(APIView):
         return Response({"status": "success"}, status=status.HTTP_200_OK)
 
 class CommandServerList(APIView):
+    authentication_classes = [JWTAuth]   # le token courant est vérifié
+    permission_classes     = []
     def get(self, request, uuid):
         try:
             commands = CommandSerializer(Command.objects.filter(agent=uuid), many=True)
@@ -95,6 +101,8 @@ class CommandServerList(APIView):
                 })
 
 class CommandCreate(APIView):
+    authentication_classes = [JWTAuth]   # le token courant est vérifié
+    permission_classes     = []
     def post(self, request):
         try:
             serializer = CommandCreateSerializer(data=request.data)
@@ -114,6 +122,8 @@ class CommandCreate(APIView):
 
 # agents
 class AgentList(APIView):
+    authentication_classes = [JWTAuth]   # le token courant est vérifié
+    permission_classes     = []
     def get(self, request):
         try:
             agents = AgentSerializer(Agent.objects.all(), many=True)
@@ -130,6 +140,8 @@ class AgentList(APIView):
                 })
 
 class MetricDetail(APIView):
+    authentication_classes = [JWTAuth]   # le token courant est vérifié
+    permission_classes     = []
     def get(self, request, pk):
         try:
             metric = MetricSerializer(Metric.objects.get(pk=pk))
@@ -147,6 +159,8 @@ class MetricDetail(APIView):
         
 
 class MetricServerDetail(APIView):
+    authentication_classes = [JWTAuth]   # le token courant est vérifié
+    permission_classes     = []
     def get(self, request, uuid):
         try:
             metric = MetricSerializer(Metric.objects.filter(agent=uuid), many=True)
@@ -163,6 +177,8 @@ class MetricServerDetail(APIView):
                 })
     
 class InventoryDetail(APIView):
+    authentication_classes = [JWTAuth]   # le token courant est vérifié
+    permission_classes     = []
     def get(self, request, pk):
         try:
             inventory = InventorySerializer(Inventory.objects.get(pk=pk))
@@ -179,6 +195,8 @@ class InventoryDetail(APIView):
                 })
     
 class InventoryServerDetail(APIView):
+    authentication_classes = [JWTAuth]   # le token courant est vérifié
+    permission_classes     = []
     def get(self, request, uuid):
         try:
             inventory = InventorySerializer(Inventory.objects.filter(agent=uuid), many=True)
